@@ -10,58 +10,129 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  # ── Job 1: Type-check + build ──────────────────────────────────────────────
-  ci:
-    name: Type-check & Build
+  # ── 1. Lint & Type Check ───────────────────────────────────────────────────
+  lint-and-typecheck:
+    name: Lint & Type Check
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - run: npm ci --legacy-peer-deps
 
-      - name: Type-check
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run typecheck
         run: npm run typecheck
         env:
-          # Dummy values so Next.js doesn't error on missing env vars at build time
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
 
-      - name: Build
+  # ── 2. Unit Tests ──────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci --legacy-peer-deps
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+  # ── 3. Integration Tests ───────────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci --legacy-peer-deps
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_URL: 'http://localhost:3000'
+
+  # ── 4. E2E Tests (Playwright) ──────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
         run: npm run build
         env:
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_URL: 'http://localhost:3000'
 
-  # ── Job 2: Deploy to Vercel (main branch only) ─────────────────────────────
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_URL: 'http://localhost:3000'
+          CI: 'true'
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ── 5. Deploy to Vercel (main only) ───────────────────────────────────────
   deploy:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [lint-and-typecheck, unit-tests, integration-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+      - run: npm install -g vercel@latest
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -76,4 +147,4 @@ jobs:
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Print deployment URL
-        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
+        run: echo "Deployed → ${{ steps.deploy.outputs.url }}"
