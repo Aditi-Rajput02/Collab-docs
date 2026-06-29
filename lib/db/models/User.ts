@@ -1,9 +1,10 @@
-import mongoose, { Schema, model, models } from 'mongoose';
+import { Schema, model, models } from 'mongoose';
 
 export interface IUser {
   _id: string;
   email: string;
   name: string;
+  passwordHash?: string;
   avatarUrl?: string;
   provider: string;
   createdAt: Date;
@@ -12,11 +13,12 @@ export interface IUser {
 
 const userSchema = new Schema<IUser>(
   {
-    _id:       { type: String, default: () => crypto.randomUUID() },
-    email:     { type: String, required: true, unique: true, index: true },
-    name:      { type: String, required: true },
-    avatarUrl: String,
-    provider:  { type: String, default: 'credentials' },
+    _id:          { type: String, default: () => crypto.randomUUID() },
+    email:        { type: String, required: true, unique: true, index: true },
+    name:         { type: String, required: true },
+    passwordHash: { type: String, select: false }, // never returned by default queries
+    avatarUrl:    String,
+    provider:     { type: String, default: 'credentials' },
   },
   { timestamps: true },
 );

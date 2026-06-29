@@ -1,24 +1,21 @@
 /**
  * Edge-runtime-safe auth config.
- * NO imports from pg, drizzle, or any Node.js-only module.
+ * NO imports from mongoose, bcrypt, or any Node.js-only module.
  * Used exclusively by middleware.ts which runs on the Edge Runtime.
  */
 import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
 import type { NextAuthConfig } from 'next-auth';
 
+// Google OAuth intentionally excluded until client IDs are configured.
+// To enable: add GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to env vars,
+// then add the Google provider here and in lib/auth/config.ts.
+
 export const edgeAuthConfig: NextAuthConfig = {
-  // No adapter here — adapter requires pg which needs crypto (Node-only)
   session: { strategy: 'jwt' },
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    // Credentials provider with no DB lookup — validation happens in the
-    // full server config (lib/auth/config.ts). Here we just let it pass
-    // so the middleware JWT check works.
+    // Credentials stub — actual DB validation happens in lib/auth/config.ts.
+    // This entry is needed so middleware can verify the JWT structure.
     Credentials({}),
   ],
   callbacks: {
@@ -33,7 +30,7 @@ export const edgeAuthConfig: NextAuthConfig = {
   },
   pages: {
     signIn: '/auth/login',
-    error: '/auth/login',
+    error:  '/auth/login',
   },
 };
 

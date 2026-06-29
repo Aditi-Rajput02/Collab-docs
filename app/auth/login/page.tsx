@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError('');
     const form = new FormData(e.currentTarget);
     const result = await signIn('credentials', {
-      email: form.get('email'),
+      email:    form.get('email'),
       password: form.get('password'),
       redirect: false,
     });
@@ -43,6 +43,7 @@ export default function LoginPage() {
             type="email"
             placeholder="Email"
             required
+            autoComplete="email"
             className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
           />
           <input
@@ -50,33 +51,20 @@ export default function LoginPage() {
             type="password"
             placeholder="Password"
             required
+            autoComplete="current-password"
             className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-500" role="alert">{error}</p>
+          )}
           <button
             type="submit"
             disabled={loading}
             className="w-full rounded-lg bg-blue-600 py-2.5 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="bg-white px-2 text-gray-400">or</span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-          className="w-full rounded-lg border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Continue with Google
-        </button>
 
         <p className="text-center text-sm text-gray-500">
           No account?{' '}

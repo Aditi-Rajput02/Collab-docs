@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth/config';
 import { connectDB } from '@/lib/db/client';
 import { Document } from '@/lib/db/models/Document';
 import { getDocumentRole, canWrite } from '@/lib/auth/rbac';
+import { checkSyncLimit } from '@/lib/security/rateLimiter';
 import { z } from 'zod';
 
 const MAX_YJS_B64 = 2 * 1024 * 1024; // 2 MB
@@ -24,6 +25,11 @@ export async function POST(
     }
 
     await connectDB();
+
+    const rateLimit = checkSyncLimit(session.user.id);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: 'Too many sync requests' }, { status: 429 });
+    }
 
     const role = await getDocumentRole(id, session.user.id);
     if (!canWrite(role)) {
