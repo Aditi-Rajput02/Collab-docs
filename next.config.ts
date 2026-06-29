@@ -27,7 +27,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['mongoose', 'bcryptjs', 'yjs', 'y-indexeddb'],
+  serverExternalPackages: ['mongoose', 'bcryptjs', 'yjs', 'y-indexeddb', 'y-protocols'],
 
   async headers() {
     return [
