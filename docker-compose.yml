@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: mysql://root:root@db:3306/collab_editor
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_SECRET: ${AUTH_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      WS_URL: ws://ws:1234
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.3
+    environment:
+      MYSQL_DATABASE: collab_editor
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: collab
+      MYSQL_PASSWORD: collab
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - '3306:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-proot']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ws:
+    image: node:20-alpine
+    working_dir: /app
+    command: npx y-websocket
+    ports:
+      - '1234:1234'
+    environment:
+      PORT: 1234
+
+volumes:
+  mysql_data:
