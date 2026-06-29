@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
-import { db } from '@/lib/db/client';
-import { documents } from '@/lib/db/schema';
-import { createDocumentSchema } from '@/lib/validations/syncPayload.schema';
-import { eq } from 'drizzle-orm';
+import { connectDB } from '@/lib/db/client';
+import { Document } from '@/lib/db/models/Document';
+import { z } from 'zod';
+
+const createSchema = z.object({
+  title: z.string().min(1).max(500).default('Untitled Document'),
+});
 
 export async function GET() {
   try {
@@ -12,12 +15,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const docs = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.ownerId, session.user.id));
+    await connectDB();
 
-    return NextResponse.json({ documents: docs });
+    const docs = await Document
+      .find({ ownerId: session.user.id, deletedAt: null })
+      .select('_id title createdAt updatedAt isPublic sizeBytes')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return NextResponse.json({ documents: docs.map(d => ({ ...d, id: d._id })) });
   } catch (err) {
     console.error('[GET /api/documents]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -32,22 +38,20 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const parsed = createDocumentSchema.safeParse(body);
+    const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const id = crypto.randomUUID();
+    await connectDB();
 
-    // MySQL does not support .returning() — insert then return constructed object
-    await db.insert(documents).values({
-      id,
-      title: parsed.data.title,
+    const doc = await Document.create({
+      title:   parsed.data.title,
       ownerId: session.user.id,
     });
 
     return NextResponse.json(
-      { document: { id, title: parsed.data.title, ownerId: session.user.id } },
+      { document: { id: doc._id, title: doc.title, ownerId: doc.ownerId } },
       { status: 201 },
     );
   } catch (err) {

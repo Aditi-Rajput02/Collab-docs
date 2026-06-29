@@ -1,17 +1,25 @@
-import { drizzle } from 'drizzle-orm/mysql2';
-import mysql from 'mysql2/promise';
-import * as schema from './schema';
+import mongoose from 'mongoose';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not set. Add it to .env.local');
+const MONGODB_URI = process.env.DATABASE_URL as string;
+
+if (!MONGODB_URI) {
+  throw new Error('DATABASE_URL env var is not set. Add MONGODB_URI to .env.local');
 }
 
-const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+// Cache the connection across HMR reloads in development
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongoosePromise: Promise<typeof mongoose> | null;
+}
 
-export const db = drizzle(pool, { schema, mode: 'default' });
-export type DB = typeof db;
+let cached = global._mongoosePromise ?? null;
+
+export async function connectDB(): Promise<typeof mongoose> {
+  if (cached) return cached;
+  cached = mongoose.connect(MONGODB_URI, {
+    bufferCommands: false,
+    maxPoolSize: 5,   // serverless-friendly — keep connections low
+  });
+  global._mongoosePromise = cached;
+  return cached;
+}

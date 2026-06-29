@@ -1,29 +1,26 @@
-import { db } from '@/lib/db/client';
-import { documentCollaborators, documents } from '@/lib/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { connectDB } from '@/lib/db/client';
+import { Document, IDocument } from '@/lib/db/models/Document';
+import { DocumentCollaborator, IDocumentCollaborator } from '@/lib/db/models/DocumentCollaborator';
 
 export type Role = 'owner' | 'editor' | 'viewer' | null;
 
 export async function getDocumentRole(documentId: string, userId: string): Promise<Role> {
-  const [doc] = await db
-    .select({ ownerId: documents.ownerId })
-    .from(documents)
-    .where(eq(documents.id, documentId));
+  await connectDB();
 
-  if (!doc) return null;
+  const doc = await Document
+    .findById(documentId)
+    .select('ownerId deletedAt')
+    .lean<Pick<IDocument, '_id' | 'ownerId' | 'deletedAt'> | null>();
+
+  if (!doc || doc.deletedAt) return null;
   if (doc.ownerId === userId) return 'owner';
 
-  const [collab] = await db
-    .select({ role: documentCollaborators.role })
-    .from(documentCollaborators)
-    .where(
-      and(
-        eq(documentCollaborators.documentId, documentId),
-        eq(documentCollaborators.userId, userId),
-      ),
-    );
+  const collab = await DocumentCollaborator
+    .findOne({ documentId, userId })
+    .select('role')
+    .lean<Pick<IDocumentCollaborator, 'role'> | null>();
 
-  return collab?.role ?? null;
+  return (collab?.role as Role) ?? null;
 }
 
 export function canWrite(role: Role): boolean {

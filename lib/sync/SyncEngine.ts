@@ -77,10 +77,11 @@ export class SyncEngine {
 
   private async pushToServer(update: Uint8Array) {
     this.transition('syncing');
+    // Send as base64 JSON — avoids binary body type issues and matches the sync API schema
     const res = await fetch(`/api/documents/${this.documentId}/sync`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: update,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ yjsState: Buffer.from(update).toString('base64') }),
     });
     if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
     const { serverUpdate } = await res.json();

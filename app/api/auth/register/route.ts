@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
-import { users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { connectDB } from '@/lib/db/client';
+import { User } from '@/lib/db/models/User';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -12,6 +11,8 @@ const registerSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    await connectDB();
+
     const body = await req.json();
     const parsed = registerSchema.safeParse(body);
 
@@ -24,26 +25,14 @@ export async function POST(req: NextRequest) {
 
     const { name, email } = parsed.data;
 
-    // Check duplicate email
-    const existing = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email));
-
-    if (existing.length > 0) {
-      return NextResponse.json(
-        { error: 'Email already registered' },
-        { status: 409 },
-      );
+    const existing = await User.findOne({ email }).select('_id').lean();
+    if (existing) {
+      return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
 
-    const id = crypto.randomUUID();
+    const user = await User.create({ name, email, provider: 'credentials' });
 
-    // MySQL drizzle does NOT support .returning() — insert then query
-    await db.insert(users).values({ id, name, email, provider: 'credentials' });
-
-    return NextResponse.json({ user: { id, email } }, { status: 201 });
-
+    return NextResponse.json({ user: { id: user._id, email: user.email } }, { status: 201 });
   } catch (err) {
     console.error('[register]', err);
     const message = err instanceof Error ? err.message : 'Internal server error';

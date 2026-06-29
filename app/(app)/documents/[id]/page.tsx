@@ -1,41 +1,33 @@
 import { auth } from '@/lib/auth/config';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db/client';
-import { documents, documentCollaborators } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { connectDB } from '@/lib/db/client';
+import { Document, IDocument } from '@/lib/db/models/Document';
+import { DocumentCollaborator } from '@/lib/db/models/DocumentCollaborator';
 import Editor from '@/components/editor/Editor';
 
-export default async function DocumentPage({ params }: { params: { id: string } }) {
+export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect('/auth/login');
 
-  // Fetch doc and verify access
-  const [doc] = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.id, params.id));
+  await connectDB();
 
-  if (!doc) redirect('/dashboard');
+  const doc = await Document.findById(id).lean<IDocument | null>();
+  if (!doc || doc.deletedAt) redirect('/dashboard');
 
   const isOwner = doc.ownerId === session.user.id;
 
   if (!isOwner) {
-    const [collab] = await db
-      .select()
-      .from(documentCollaborators)
-      .where(
-        and(
-          eq(documentCollaborators.documentId, params.id),
-          eq(documentCollaborators.userId, session.user.id),
-        ),
-      );
+    const collab = await DocumentCollaborator
+      .findOne({ documentId: id, userId: session.user.id })
+      .lean();
     if (!collab) redirect('/dashboard');
   }
 
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden">
       <Editor
-        documentId={doc.id}
+        documentId={doc._id as string}
         title={doc.title}
         userName={session.user?.name ?? session.user?.email ?? 'You'}
       />

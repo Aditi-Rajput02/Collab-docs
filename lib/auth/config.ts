@@ -1,23 +1,16 @@
-/**
- * Full server-side auth config.
- * Imports pg via DrizzleAdapter — must NEVER be imported by middleware.ts.
- * Used by Server Components, API routes, and Server Actions only.
- */
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { db } from '@/lib/db/client';
-import { users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { connectDB } from '@/lib/db/client';
+import { User, IUser } from '@/lib/db/models/User';
 import { z } from 'zod';
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  email:    z.string().email(),
   password: z.string().min(8),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // No adapter — using JWT sessions with Credentials provider only.
-  // DrizzleAdapter would require emailVerified/image columns we don't have.
+  // JWT sessions — no adapter needed, no extra DB tables required
   session: { strategy: 'jwt' },
   providers: [
     Credentials({
@@ -25,13 +18,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, parsed.data.email));
+        await connectDB();
+
+        const user = await User
+          .findOne({ email: parsed.data.email })
+          .select('_id email name')
+          .lean<Pick<IUser, '_id' | 'email' | 'name'> | null>();
 
         if (!user) return null;
-        return { id: user.id, email: user.email, name: user.name };
+        return { id: user._id as string, email: user.email, name: user.name };
       },
     }),
   ],
@@ -47,6 +42,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: '/auth/login',
-    error: '/auth/login',
+    error:  '/auth/login',
   },
 });

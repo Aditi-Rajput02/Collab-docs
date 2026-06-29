@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
-import { db } from '@/lib/db/client';
-import { documents } from '@/lib/db/schema';
+import { connectDB } from '@/lib/db/client';
+import { Document } from '@/lib/db/models/Document';
 import { getDocumentRole, canWrite } from '@/lib/auth/rbac';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-const MAX_YJS_B64 = 2 * 1024 * 1024; // 2 MB base64 limit
+const MAX_YJS_B64 = 2 * 1024 * 1024; // 2 MB
 
 const syncSchema = z.object({
   yjsState: z.string().max(MAX_YJS_B64).nullable().optional(),
@@ -15,15 +14,18 @@ const syncSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const role = await getDocumentRole(params.id, session.user.id);
+    await connectDB();
+
+    const role = await getDocumentRole(id, session.user.id);
     if (!canWrite(role)) {
       return NextResponse.json({ error: 'Read-only access' }, { status: 403 });
     }
@@ -39,7 +41,7 @@ export async function POST(
     if (parsed.data.title)                  updates.title    = parsed.data.title;
 
     if (Object.keys(updates).length > 0) {
-      await db.update(documents).set(updates).where(eq(documents.id, params.id));
+      await Document.findByIdAndUpdate(id, { $set: updates });
     }
 
     return NextResponse.json({ ok: true });

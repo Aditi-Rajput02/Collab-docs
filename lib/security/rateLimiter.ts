@@ -1,4 +1,8 @@
-import { kv } from '@vercel/kv';
+// Simple in-memory rate limiter (no Redis/KV required for Vercel hobby tier).
+// For production at scale, swap the Map for Upstash Redis.
+
+type Entry = { count: number; resetAt: number };
+const store = new Map<string, Entry>();
 
 type RateLimitResult = {
   allowed: boolean;
@@ -12,13 +16,21 @@ export async function rateLimit(
   limit: number,
   windowSec: number,
 ): Promise<RateLimitResult> {
-  const key = `rl:${action}:${userId}`;
-  const count = await kv.incr(key);
-  if (count === 1) await kv.expire(key, windowSec);
-  const ttl = await kv.ttl(key);
+  const key = `${action}:${userId}`;
+  const now = Date.now();
+  let entry = store.get(key);
+
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + windowSec * 1000 };
+  }
+
+  entry.count += 1;
+  store.set(key, entry);
+
+  const resetIn = Math.ceil((entry.resetAt - now) / 1000);
   return {
-    allowed: count <= limit,
-    remaining: Math.max(0, limit - count),
-    resetIn: ttl,
+    allowed:   entry.count <= limit,
+    remaining: Math.max(0, limit - entry.count),
+    resetIn,
   };
 }
