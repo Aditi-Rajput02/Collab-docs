@@ -23,7 +23,7 @@ function makeRequest(method: string, body?: object) {
 }
 
 describe('GET /api/documents', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('returns 401 when not authenticated', async () => {
     mockAuth.mockResolvedValue(null);
@@ -52,7 +52,7 @@ describe('GET /api/documents', () => {
 });
 
 describe('POST /api/documents', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('returns 401 when not authenticated', async () => {
     mockAuth.mockResolvedValue(null);

@@ -68,7 +68,7 @@ describe('POST /api/auth/register', () => {
 
   it('returns 429 when rate-limited', async () => {
     const { checkRegisterLimit } = await import('@/lib/security/rateLimiter');
-    vi.mocked(checkRegisterLimit).mockReturnValueOnce({ allowed: false, resetIn: 900 });
+    vi.mocked(checkRegisterLimit).mockReturnValueOnce({ allowed: false, remaining: 0, resetIn: 900 });
 
     const res = await POST(makeRequest({ name: 'Alice', email: 'alice@example.com', password: 'password123' }));
     expect(res.status).toBe(429);
