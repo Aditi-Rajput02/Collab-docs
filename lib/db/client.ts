@@ -16,10 +16,21 @@ let cached = global._mongoosePromise ?? null;
 
 export async function connectDB(): Promise<typeof mongoose> {
   if (cached) return cached;
-  cached = mongoose.connect(MONGODB_URI, {
+
+  const connectPromise = mongoose.connect(MONGODB_URI, {
     bufferCommands: false,
     maxPoolSize: 5,   // serverless-friendly — keep connections low
   });
+
+  // Never cache a rejected promise — a single transient failure (cold-start
+  // network blip, Atlas hiccup) would otherwise poison every request on this
+  // warm Lambda instance until it's recycled, even though the DB is fine.
+  connectPromise.catch(() => {
+    cached = null;
+    global._mongoosePromise = null;
+  });
+
+  cached = connectPromise;
   global._mongoosePromise = cached;
   return cached;
 }

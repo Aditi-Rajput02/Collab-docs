@@ -29,20 +29,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const rateLimit = checkLoginLimit(ip);
         if (!rateLimit.allowed) return null; // NextAuth maps null → CredentialsSignin error
 
-        await connectDB();
+        try {
+          await connectDB();
 
-        // +passwordHash explicitly opts-in to the hidden field
-        const user = await User
-          .findOne({ email: parsed.data.email })
-          .select('+passwordHash _id email name')
-          .lean<Pick<IUser, '_id' | 'email' | 'name' | 'passwordHash'> | null>();
+          // +passwordHash explicitly opts-in to the hidden field
+          const user = await User
+            .findOne({ email: parsed.data.email })
+            .select('+passwordHash _id email name')
+            .lean<Pick<IUser, '_id' | 'email' | 'name' | 'passwordHash'> | null>();
 
-        if (!user || !user.passwordHash) return null;
+          if (!user || !user.passwordHash) return null;
 
-        const passwordValid = await bcrypt.compare(parsed.data.password, user.passwordHash);
-        if (!passwordValid) return null;
+          const passwordValid = await bcrypt.compare(parsed.data.password, user.passwordHash);
+          if (!passwordValid) return null;
 
-        return { id: user._id as string, email: user.email, name: user.name };
+          return { id: user._id as string, email: user.email, name: user.name };
+        } catch (err) {
+          // Surface the real cause in server logs — otherwise every failure
+          // (DB unreachable, Atlas IP not whitelisted, etc.) looks identical
+          // to "wrong password" from the client's perspective.
+          console.error('[auth] authorize() failed:', err);
+          return null;
+        }
       },
     }),
   ],
