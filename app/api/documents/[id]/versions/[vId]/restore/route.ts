@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth/config';
 import { connectDB } from '@/lib/db/client';
 import { DocumentVersion, IDocumentVersion } from '@/lib/db/models/DocumentVersion';
 import { Document } from '@/lib/db/models/Document';
-import { getDocumentRole, canWrite } from '@/lib/auth/rbac';
+import { getDocumentRole, canManage } from '@/lib/auth/rbac';
 
 export async function POST(
   _req: NextRequest,
@@ -17,7 +17,7 @@ export async function POST(
     await connectDB();
 
     const role = await getDocumentRole(id, session.user.id);
-    if (!canWrite(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManage(role)) return NextResponse.json({ error: 'Only the owner can restore versions' }, { status: 403 });
 
     const version = await DocumentVersion
       .findById(vId)
@@ -27,9 +27,11 @@ export async function POST(
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
 
-    await Document.findByIdAndUpdate(id, {
-      $set: { contentJson: version.snapshot },
-    });
+    const update: Record<string, unknown> = version.yjsSnapshot
+      ? { yjsState: version.yjsSnapshot }
+      : { contentJson: version.snapshot };
+
+    await Document.findByIdAndUpdate(id, { $set: update });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

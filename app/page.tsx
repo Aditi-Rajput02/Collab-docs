@@ -29,7 +29,7 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="text-sm text-gray-400 pt-4">
-          Built with Next.js 15 · Yjs CRDT · PostgreSQL
+          Built with Next.js 15 · Yjs CRDT · MongoDB
         </p>
       </div>
     </main>

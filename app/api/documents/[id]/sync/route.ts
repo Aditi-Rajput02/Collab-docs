@@ -9,10 +9,10 @@ import { z } from 'zod';
 
 const MAX_B64 = 2 * 1024 * 1024; // 2 MB base64
 
+const EMPTY_YJS_UPDATE_SIZE = 2;
+
 const syncSchema = z.object({
-  // Full Yjs state encoded as base64 (Y.encodeStateAsUpdate)
   yjsUpdate:   z.string().max(MAX_B64),
-  // Client's state vector so server can return only what client is missing
   stateVector: z.string().max(200_000).optional(),
   title:       z.string().max(500).optional(),
 });
@@ -30,26 +30,27 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params;
-
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
     const rateLimit = checkSyncLimit(session.user.id);
     if (!rateLimit.allowed) {
       return NextResponse.json({ error: 'Too many sync requests' }, { status: 429 });
     }
+    const { id } = await params;
+    await connectDB();
 
     const role = await getDocumentRole(id, session.user.id);
     if (!canWrite(role)) {
       return NextResponse.json({ error: 'Read-only access' }, { status: 403 });
     }
 
-    const body = await req.json();
+    let body: unknown;
+    try { body = await req.json(); }
+    catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
     const parsed = syncSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
@@ -80,8 +81,7 @@ export async function POST(
     if (stateVector) {
       const clientSV = b64ToBytes(stateVector);
       const diff = Y.encodeStateAsUpdate(serverDoc, clientSV);
-      // diff.length > 2 means there is actual content beyond the empty update header
-      if (diff.length > 2) {
+      if (diff.length > EMPTY_YJS_UPDATE_SIZE) {
         serverDiff = bytesToB64(diff);
       }
     }
@@ -89,13 +89,14 @@ export async function POST(
     serverDoc.destroy();
     // ── End CRDT Merge ───────────────────────────────────────────────────────
 
-    // Persist merged state (and optional title update)
-    const dbUpdate: Record<string, unknown> = { yjsState: bytesToB64(mergedState) };
+    const dbUpdate: Record<string, unknown> = {
+      yjsState:  bytesToB64(mergedState),
+      sizeBytes: mergedState.byteLength,
+    };
     if (title) dbUpdate.title = title;
 
     await Document.findByIdAndUpdate(id, { $set: dbUpdate });
 
-    // Return the server diff so the client can apply changes it was missing
     return NextResponse.json({ ok: true, serverDiff });
   } catch (err) {
     console.error('[sync]', err);

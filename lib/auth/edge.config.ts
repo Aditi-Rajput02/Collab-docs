@@ -6,6 +6,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import type { NextAuthConfig } from 'next-auth';
+import { sharedCallbacks, sharedPages } from './shared.config';
 
 // Google OAuth intentionally excluded until client IDs are configured.
 // To enable: add GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to env vars,
@@ -18,20 +19,8 @@ export const edgeAuthConfig: NextAuthConfig = {
     // This entry is needed so middleware can verify the JWT structure.
     Credentials({}),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) token.id = user.id;
-      return token;
-    },
-    session({ session, token }) {
-      if (token.id) session.user.id = token.id as string;
-      return session;
-    },
-  },
-  pages: {
-    signIn: '/auth/login',
-    error:  '/auth/login',
-  },
+  callbacks: sharedCallbacks,
+  pages:     sharedPages,
 };
 
 export const { auth: edgeAuth } = NextAuth(edgeAuthConfig);

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db/client';
 import { User, IUser } from '@/lib/db/models/User';
 import { checkLoginLimit } from '@/lib/security/rateLimiter';
+import { sharedCallbacks, sharedPages } from './shared.config';
 import { z } from 'zod';
 
 const credentialsSchema = z.object({
@@ -54,18 +55,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) token.id = user.id;
-      return token;
-    },
-    session({ session, token }) {
-      if (token.id) session.user.id = token.id as string;
-      return session;
-    },
-  },
-  pages: {
-    signIn: '/auth/login',
-    error:  '/auth/login',
-  },
+  callbacks: sharedCallbacks,
+  pages:     sharedPages,
 });

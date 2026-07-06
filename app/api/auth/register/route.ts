@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    const body = await req.json();
+    let body: unknown;
+    try { body = await req.json(); }
+    catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
     const parsed = registerSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -38,7 +41,6 @@ export async function POST(req: NextRequest) {
 
     const existing = await User.findOne({ email }).select('_id').lean();
     if (existing) {
-      // Return same message as "not found" to avoid email enumeration
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
 

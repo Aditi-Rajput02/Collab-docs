@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+const isDev = process.env.NODE_ENV === 'development';
 
 const securityHeaders = [
   // Prevent clickjacking
@@ -9,15 +10,14 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // Disable unused browser features
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  // Basic CSP — tightened: only allow resources from same origin + inline styles (needed for Tailwind)
   {
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval needed by Next.js in dev
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.mongodb.net",
+      "connect-src 'self'",
       "font-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",

@@ -21,10 +21,9 @@ type Props = {
 type SyncState = 'saved' | 'saving' | 'offline' | 'error';
 
 export default function Editor({ documentId, title, userName }: Props) {
-  const ydocRef      = useRef<Y.Doc | null>(null);
+  const ydocRef      = useRef<Y.Doc>(new Y.Doc());
   const idbRef       = useRef<IndexeddbPersistence | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref so pushToServer always reads the latest title without stale closure
   const docTitleRef  = useRef(title);
 
   const [docTitle,   setDocTitle]   = useState(title);
@@ -39,19 +38,15 @@ export default function Editor({ documentId, title, userName }: Props) {
   };
 
   // ── Bidirectional sync with server ────────────────────────────────────────
-  // Sends full Yjs state + state vector.
-  // Server merges with its copy (CRDT) and returns what the client was missing.
-  // Client applies the diff → both sides are identical.
   const pushToServer = useCallback(async () => {
     const ydoc = ydocRef.current;
-    if (!ydoc || !navigator.onLine) return;
+    if (!navigator.onLine) return;
 
     setSyncState('saving');
     try {
       const update      = Y.encodeStateAsUpdate(ydoc);
       const stateVector = Y.encodeStateVector(ydoc);
 
-      // Use btoa (web-native) for base64 encoding instead of Node's Buffer
       const toB64 = (arr: Uint8Array) =>
         btoa(Array.from(arr, b => String.fromCharCode(b)).join(''));
 
@@ -72,8 +67,7 @@ export default function Editor({ documentId, title, userName }: Props) {
 
       const { serverDiff } = await res.json();
 
-      // Apply whatever the server had that we were missing
-      if (serverDiff && ydocRef.current) {
+      if (serverDiff) {
         const diffBytes = Uint8Array.from(atob(serverDiff), c => c.charCodeAt(0));
         Y.applyUpdate(ydocRef.current, diffBytes);
       }
@@ -94,22 +88,18 @@ export default function Editor({ documentId, title, userName }: Props) {
 
   // ── Yjs + IndexedDB setup ─────────────────────────────────────────────────
   useEffect(() => {
-    const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
+    const ydoc = ydocRef.current;
 
     // Persist ALL changes immediately to IndexedDB (offline-first)
     const idb = new IndexeddbPersistence(`collab-doc-${documentId}`, ydoc);
     idbRef.current = idb;
 
     idb.on('synced', () => {
-      // IndexedDB has loaded any previously saved offline state into ydoc
       setIdbReady(true);
     });
 
     const handleOnline = () => {
       setIsOnline(true);
-      // Immediately sync any offline edits to the server
-      // idb.synced guarantees ydoc already has IndexedDB state at this point
       pushToServer();
     };
     const handleOffline = () => {
@@ -130,9 +120,7 @@ export default function Editor({ documentId, title, userName }: Props) {
     };
   }, [documentId, pushToServer]);
 
-  // ── Initial server sync after IDB loads ───────────────────────────────────
-  // Covers the case: user edited offline → closed browser → reopened while online.
-  // IndexedDB has the offline edits; we push them to MongoDB as soon as IDB is ready.
+  // Push any offline edits once IDB has rehydrated and we're online
   useEffect(() => {
     if (idbReady && navigator.onLine) {
       pushToServer();
@@ -144,7 +132,8 @@ export default function Editor({ documentId, title, userName }: Props) {
     {
       extensions: [
         StarterKit.configure({ history: false }),
-        Collaboration.configure({ document: ydocRef.current ?? new Y.Doc() }),
+        // ydocRef.current is always defined now (eager init above)
+        Collaboration.configure({ document: ydocRef.current }),
         Placeholder.configure({ placeholder: 'Start writing…' }),
         CharacterCount,
       ],
@@ -206,12 +195,17 @@ export default function Editor({ documentId, title, userName }: Props) {
       {/* Toolbar */}
       <EditorToolbar editor={editor} />
 
-      {/* Editor canvas */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-8 py-10">
-          <EditorContent editor={editor} />
+      {!idbReady ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-gray-400 animate-pulse">Loading document…</p>
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-8 py-10">
+            <EditorContent editor={editor} />
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-6 py-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">

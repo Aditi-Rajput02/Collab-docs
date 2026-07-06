@@ -5,6 +5,7 @@ import { Document } from '@/lib/db/models/Document';
 import { DocumentCollaborator } from '@/lib/db/models/DocumentCollaborator';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -13,17 +14,19 @@ export default async function DashboardPage() {
   const userId = session.user.id;
   await connectDB();
 
-  // Docs owned by this user (not soft-deleted)
+  // Docs owned by this user (not soft-deleted), capped at 100
   const ownedRaw = await Document
     .find({ ownerId: userId, deletedAt: null })
     .select('_id title createdAt updatedAt')
     .sort({ updatedAt: -1 })
+    .limit(100)
     .lean();
 
   // Docs this user is a collaborator on
   const collabs = await DocumentCollaborator
     .find({ userId })
     .select('documentId role')
+    .limit(100)
     .lean();
 
   const sharedDocIds = collabs.map(c => c.documentId);
@@ -61,9 +64,7 @@ export default async function DashboardPage() {
           <span className="text-sm text-gray-500">
             {session.user?.name ?? session.user?.email}
           </span>
-          <Link href="/auth/login" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
-            Sign out
-          </Link>
+          <SignOutButton />
         </div>
       </header>
 

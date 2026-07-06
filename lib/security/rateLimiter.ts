@@ -13,6 +13,14 @@
 type Window = { count: number; resetAt: number };
 const store = new Map<string, Window>();
 
+const cleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [key, w] of store) {
+    if (w.resetAt <= now) store.delete(key);
+  }
+}, 5 * 60 * 1000);
+if (cleanup.unref) cleanup.unref();
+
 export type RateLimitResult = { allowed: boolean; remaining: number; resetIn: number };
 
 function check(key: string, limit: number, windowSec: number): RateLimitResult {

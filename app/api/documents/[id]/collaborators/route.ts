@@ -47,7 +47,10 @@ export async function POST(
     const role = await getDocumentRole(id, session.user.id);
     if (!canManage(role)) return NextResponse.json({ error: 'Only owner can add collaborators' }, { status: 403 });
 
-    const body = await req.json();
+    let body: unknown;
+    try { body = await req.json(); }
+    catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
     const parsed = addSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 

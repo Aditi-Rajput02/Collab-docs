@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 
 // WebSocket upgrades are not supported in Next.js API routes on Vercel.
 // Real-time sync is handled via y-indexeddb offline persistence

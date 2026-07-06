@@ -7,7 +7,8 @@ export interface IDocumentVersion {
   label?: string;
   description?: string;
   snapshot: unknown;
-  yjsSv?: string;       // base64-encoded Yjs state vector
+  yjsSv?: string;       // base64-encoded Yjs state vector (for diff calculations)
+  yjsSnapshot?: string; // base64-encoded full Yjs state (required for restore)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +22,7 @@ const schema = new Schema<IDocumentVersion>(
     description: String,
     snapshot:    { type: Schema.Types.Mixed, required: true },
     yjsSv:       String,
+    yjsSnapshot: String,
   },
   { timestamps: true },
 );

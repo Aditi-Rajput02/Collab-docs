@@ -14,8 +14,8 @@ vi.mock('@/lib/auth/config', () => ({ auth: mockAuth }));
 
 const { GET, POST } = await import('@/app/api/documents/route');
 
-function makeRequest(method: string, body?: object) {
-  return new NextRequest('http://localhost/api/documents', {
+function makeRequest(method: string, body?: object, url = 'http://localhost/api/documents') {
+  return new NextRequest(url, {
     method,
     headers: body ? { 'content-type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
@@ -28,7 +28,7 @@ describe('GET /api/documents', () => {
   it('returns 401 when not authenticated', async () => {
     mockAuth.mockResolvedValue(null);
 
-    const res = await GET();
+    const res = await GET(makeRequest('GET'));
     expect(res.status).toBe(401);
   });
 
@@ -37,12 +37,13 @@ describe('GET /api/documents', () => {
     mockDocFind.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       sort:   vi.fn().mockReturnThis(),
+      limit:  vi.fn().mockReturnThis(),
       lean:   vi.fn().mockResolvedValue([
         { _id: 'doc-1', title: 'My Doc', createdAt: new Date(), updatedAt: new Date() },
       ]),
     });
 
-    const res  = await GET();
+    const res  = await GET(makeRequest('GET'));
     const body = await res.json();
 
     expect(res.status).toBe(200);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/config';
+export const dynamic = 'force-dynamic';
 
 export async function POST(_req: NextRequest) {
   const session = await auth();
