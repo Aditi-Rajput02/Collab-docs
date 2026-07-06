@@ -31,9 +31,10 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
         env:
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
+          AUTH_SECRET:    ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          AUTH_TRUST_HOST: 'true'
+          DATABASE_URL:   ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
+          NEXTAUTH_URL:   ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
 
   # ── 2. Unit Tests ──────────────────────────────────────────────────────────
   unit-tests:
@@ -71,9 +72,10 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
         env:
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
+          AUTH_SECRET:    ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          AUTH_TRUST_HOST: 'true'
+          DATABASE_URL:   ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
+          NEXTAUTH_URL:   ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
 
   # ── 4. E2E Tests (Playwright) ──────────────────────────────────────────────
   e2e-tests:
@@ -109,17 +111,22 @@ jobs:
       - name: Build app
         run: npm run build
         env:
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
+          AUTH_SECRET:     ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          # AUTH_TRUST_HOST tells NextAuth v5 to trust the localhost host header
+          # produced by the Playwright test server. Without this every session
+          # request throws "UntrustedHost" and all auth-touching tests fail.
+          AUTH_TRUST_HOST: 'true'
+          DATABASE_URL:    ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
+          NEXTAUTH_URL:    'http://localhost:3000'
 
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
-          CI: 'true'
+          AUTH_SECRET:     ${{ secrets.AUTH_SECRET || 'ci-test-secret-at-least-32-chars!!' }}
+          AUTH_TRUST_HOST: 'true'
+          DATABASE_URL:    ${{ secrets.DATABASE_URL || 'mongodb://localhost:27017/ci_placeholder' }}
+          NEXTAUTH_URL:    'http://localhost:3000'
+          CI:              'true'
 
       - name: Upload Playwright report
         if: failure()
@@ -137,6 +144,10 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     env:
+      # Vercel CLI reads these three variables from the environment automatically.
+      # Using env vars (not --token= CLI flags) means a missing secret produces
+      # a clear "authentication required" error rather than "missing flag value".
+      VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -151,16 +162,29 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      # Fail early with a clear message rather than letting the CLI crash
+      # mid-run with a cryptic "missing flag value" error.
+      - name: Validate Vercel secrets are configured
+        run: |
+          missing=()
+          [ -z "$VERCEL_TOKEN"      ] && missing+=("VERCEL_TOKEN")
+          [ -z "$VERCEL_ORG_ID"     ] && missing+=("VERCEL_ORG_ID")
+          [ -z "$VERCEL_PROJECT_ID" ] && missing+=("VERCEL_PROJECT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error title=Missing Vercel secrets::Add these to GitHub → Settings → Secrets → Actions: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production
 
       - name: Build for Vercel
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod
 
       - name: Deploy to Vercel
         id: deploy
         run: |
-          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          URL=$(vercel deploy --prebuilt --prod)
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Print deployment URL
